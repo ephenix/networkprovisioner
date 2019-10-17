@@ -1,0 +1,124 @@
+Parameters:
+  VpcName:
+    Type: String
+    Description: Enter a name for the VPC and its subnets.
+    MinLength: 1
+    MaxLength: 64
+  TransitGateway:
+    Type: String
+    Description: Transit Gateway ID that is shared with your organization.
+    Default: DEFAULTTRANSITGATEWAY
+    AllowedPattern: "tgw-([a-zA-Z0-9]+)"
+Resources:
+  vpccidr:
+    Type: Custom::GetCIDR
+    Properties:
+      ServiceToken: NEXTCIDRFUNCTIONARN
+      CidrIndex: 0
+      DynamoDbTable: DYNAMODBTABLE
+      AwsRegion: !Ref AWS::Region
+      VpcSize: VPCSIZE
+      SubnetSize: SUBNETSIZE
+      MasterCidr: MASTERCIDR
+  Subnet1Cidr:
+    Type: Custom::GetCIDR
+    DependsOn: vpccidr
+    Properties:
+      ServiceToken: NEXTCIDRFUNCTIONARN
+      CidrIndex: 1
+      DynamoDbTable: DYNAMODBTABLE
+      AwsRegion: !Ref AWS::Region
+      VpcSize: VPCSIZE
+      SubnetSize: SUBNETSIZE
+      MasterCidr: MASTERCIDR
+  Subnet2Cidr:
+    Type: Custom::GetCIDR
+    DependsOn: vpccidr
+    Properties:
+      ServiceToken: NEXTCIDRFUNCTIONARN
+      CidrIndex: 2
+      DynamoDbTable: DYNAMODBTABLE
+      AwsRegion: !Ref AWS::Region
+      VpcSize: VPCSIZE
+      SubnetSize: SUBNETSIZE
+      MasterCidr: MASTERCIDR
+  Vpc:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: !Ref vpccidr
+      EnableDnsSupport: true
+      Tags:
+        - Key: Name
+          Value: !Sub vpc-${VpcName}
+  Subnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      AvailabilityZone: !Sub ${AWS::Region}a
+      VpcId: !Ref Vpc
+      CidrBlock: !Ref Subnet1Cidr
+      Tags:
+        - Key: Name
+          Value: !Sub ${VpcName}-private-${AWS::Region}a
+  Subnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      AvailabilityZone: !Sub ${AWS::Region}b
+      VpcId: !Ref Vpc
+      CidrBlock: !Ref Subnet2Cidr
+      Tags:
+        - Key: Name
+          Value: !Sub ${VpcName}-private-${AWS::Region}b
+  TgwAttachment:
+    Type: AWS::EC2::TransitGatewayAttachment
+    DependsOn: CloudWatchEventRule
+    Properties:
+      TransitGatewayId: !Ref TransitGateway
+      VpcId: !Ref Vpc
+      SubnetIds:
+        - !Ref Subnet1
+        - !Ref Subnet2
+  CloudWatchEventsRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          -
+            Effect: Allow
+            Principal:
+              Service:
+                - events.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      Path: /
+      Policies:
+        - PolicyName: "sendevents"
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - events:PutEvents
+                Resource:
+                  - !Sub "arn:aws:events:${AWS::Region}:MASTERAWSACCOUNT:event-bus/default"
+  CloudWatchEventRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Description: Sends Tgw Attachment Creation events to Master bucket
+      EventPattern:
+        source: 
+          - aws.ec2
+        detail-type: 
+          - AWS API Call via CloudTrail
+        detail: 
+          eventSource:
+            - ec2.amazonaws.com
+          eventName:
+            - CreateTransitGatewayVpcAttachment
+      Name: CreateTransitGatewayVpcAttachment
+      RoleArn: !GetAtt CloudWatchEventsRole.Arn
+      State: ENABLED
+      Targets:
+        -
+          Id: MASTERAWSACCOUNT
+          Arn: !Sub 'arn:aws:events:${AWS::Region}:MASTERAWSACCOUNT:event-bus/default'

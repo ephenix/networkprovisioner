@@ -1,0 +1,241 @@
+Description: Provisions a service catalog Portfolio with services to provision networks in multiple sub-accounts.
+Parameters:
+  MasterCidr:
+    Description: The network from which all VPCs will be provisioned.
+    Default: '10.0.0.0/16'
+    Type: String
+  VpcCidrSize:
+    Description: The mask bits for VPC Cidrs.
+    Default: 24
+    Type: Number
+    MinValue: 1
+    MaxValue: 28
+  SubnetCidrSize:
+    Description: The mask bits for Subnet Cidrs.
+    Default: 26
+    Type: Number
+    MinValue: 1
+    MaxValue: 28
+  MasterTemplateBucket:
+    Description: The master templates for this application.
+    Type: String
+  TransitGateway:
+    Description: The default transit gateway. This must be shared with all other accounts using Resource Access Manager.
+    Default: tgw-00000000000000000
+    Type: String
+    AllowedPattern: "tgw-([a-zA-Z0-9]+)"
+
+Resources:
+  LambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          -
+            Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      Path: /
+      Policies:
+        - PolicyName: "lambda-logs"
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource:
+                  - "arn:aws:logs:*:*:*"
+        - PolicyName: "lambda-dynamodb"
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - dynamodb:GetItem
+                  - dynamodb:PutItem
+                  - dynamodb:Scan
+                Resource:
+                  - !GetAtt DynamoDBTable.Arn
+        - PolicyName: "lambda-lambda"
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - lambda:AddPermission
+                Resource: '*'
+        - PolicyName: "lambda-s3"
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:*Object
+                Resource:
+                  - !Sub arn:aws:s3:::${MasterTemplateBucket}/*
+        - PolicyName: "lambda-tgwattachmentacceptance"
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - ec2:AcceptTransitGatewayVpcAttachment
+                Resource: '*'
+
+  DynamoDBTable: 
+    Type: AWS::DynamoDB::Table
+    Properties: 
+      AttributeDefinitions: 
+        - 
+          AttributeName: "nextcidr"
+          AttributeType: "S"
+        - 
+          AttributeName: "id"
+          AttributeType: "N"
+      KeySchema: 
+        - 
+          AttributeName: "nextcidr"
+          KeyType: "HASH"
+        - 
+          AttributeName: "id"
+          KeyType: "RANGE"
+      ProvisionedThroughput: 
+        ReadCapacityUnits: "1"
+        WriteCapacityUnits: "1"
+  
+  NextCidrFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      Handler: nextcidr.handler
+      Timeout: 30 
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Runtime: python3.6
+      Code:
+        S3Bucket: !Ref MasterTemplateBucket
+        S3Key: !Sub 'lambda/nextcidr.py.zip'
+  
+  AcceptTgwAttachmentFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      Handler: accepttgwattachment.handler
+      Timeout: 30 
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Runtime: python3.6
+      Code:
+        S3Bucket: !Ref MasterTemplateBucket
+        S3Key: !Sub 'lambda/accepttgwattachment.py.zip'
+    
+  TgwAttachmentRequestEvent:
+      Type: "AWS::Events::Rule"
+      Properties: 
+        Description: "Triggers a lambda function when a new transit gateway is created in a sub-account."
+        EventPattern: 
+          source: 
+            - "aws.ec2"
+          detail-type: 
+            - "AWS API Call via CloudTrail"
+          detail: 
+            eventSource:
+              - ec2.amazonaws.com
+            eventName:
+              - CreateTransitGatewayVpcAttachment
+        State: "ENABLED"
+        Targets:
+          -
+            Arn: !GetAtt AcceptTgwAttachmentFunction.Arn
+            Id: !Ref AcceptTgwAttachmentFunction
+
+  PermissionForEventsToInvokeLambda: 
+    Type: AWS::Lambda::Permission
+    Properties: 
+      FunctionName: !Ref AcceptTgwAttachmentFunction
+      Action: "lambda:InvokeFunction"
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt TgwAttachmentRequestEvent.Arn
+
+  AddPermissionsFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      Handler: addpermissions.handler
+      Timeout: 30 
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Runtime: python3.6
+      Code:
+        S3Bucket: !Ref MasterTemplateBucket
+        S3Key: !Sub 'lambda/addpermissions.py.zip'
+  
+  TokenReplacementFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      Handler: tokenreplacetemplate.handler
+      Timeout: 30 
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Runtime: python3.6
+      Code:
+        S3Bucket: !Ref MasterTemplateBucket
+        S3Key: !Sub 'lambda/tokenreplacetemplate.py.zip'
+
+  ServicePortfolio:
+    Type: "AWS::ServiceCatalog::Portfolio"
+    Properties:
+      ProviderName: Networking
+      Description: Deploys VPCs in sub-accounts
+      DisplayName: !Sub Networking Services ${AWS::StackName}
+    
+  TokenizeVpcTemplate: 
+    Type: Custom::TokenizeTemplate
+    Properties:
+      ServiceToken: !GetAtt TokenReplacementFunction.Arn
+      S3BucketName: !Ref MasterTemplateBucket
+      TemplateS3Key: templates/newvpc.yaml
+      TransformedTemplateS3Key: transformed/newvpc.yaml
+      TokenDict:
+        NEXTCIDRFUNCTIONARN: !GetAtt  NextCidrFunction.Arn
+        ACCEPTTGWATTACHMENTARN: !GetAtt  AcceptTgwAttachmentFunction.Arn
+        DYNAMODBTABLE: !Ref DynamoDBTable
+        VPCSIZE: !Ref VpcCidrSize
+        SUBNETSIZE: !Ref SubnetCidrSize
+        MASTERCIDR: !Ref MasterCidr
+        DEFAULTTRANSITGATEWAY: !Ref TransitGateway
+        MASTERAWSACCOUNT: !Ref AWS::AccountId
+
+  TokenizeAccountAdder: 
+    Type: Custom::TokenizeTemplate
+    Properties:
+      ServiceToken: !GetAtt TokenReplacementFunction.Arn
+      S3BucketName: !Ref MasterTemplateBucket
+      TemplateS3Key: templates/addtargetaccount.yaml
+      TransformedTemplateS3Key: !Sub transformed/addtargetaccount${AWS::StackName}.yaml
+      TokenDict:
+        PERMISSIONFUNCTIONARN: !GetAtt  AddPermissionsFunction.Arn
+        PORTFOLIOID: !Ref ServicePortfolio
+        NEWVPCTEMPLATEURL: !Sub https://s3.amazonaws.com/${MasterTemplateBucket}/transformed/newvpc.yaml
+        GRANTROLENAME: !Ref LambdaExecutionRole
+        ADMINROLEARN: !Sub arn:aws:iam::${AWS::AccountId}:role/service-role/AWSControlTowerStackSetRole
+        CIDRFUNCTIONNAME: !Ref NextCidrFunction
+        TGWFUNCTIONNAME: !Ref AcceptTgwAttachmentFunction
+
+  NewTargetAccountProduct:
+    Type: AWS::ServiceCatalog::CloudFormationProduct
+    DependsOn: TokenizeAccountAdder
+    Properties: 
+      Description: Adds a new Product which will in turn provision VPCs in a specific target account.
+      Distributor: Networking
+      Name: New Network Target Account
+      Owner: Networking
+      ProvisioningArtifactParameters:
+      - Info:
+          LoadTemplateFromURL: !Sub https://s3.amazonaws.com/${MasterTemplateBucket}/transformed/addtargetaccount${AWS::StackName}.yaml
+
+  NewTargetAccountProductAssociation:
+    Type: AWS::ServiceCatalog::PortfolioProductAssociation
+    Properties: 
+      PortfolioId: !Ref ServicePortfolio
+      ProductId: !Ref NewTargetAccountProduct
