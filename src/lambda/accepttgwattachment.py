@@ -1,7 +1,5 @@
 import json
 import boto3
-import ipaddress
-import decimal
 import logging
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
