@@ -37,6 +37,6 @@ for f in os.listdir('./src/lambda'):
         zf.close()
 
 # Copy templates   --->   output
-for f in os.listdir('./src/cloudformation'):
+for f in os.listdir('./src/templates'):
     print("Copying {}   --->   {}/templates".format(f,output))
     shutil.copyfile('./src/cloudformation/{}'.format(f), '{}/templates/{}'.format(output,f))
