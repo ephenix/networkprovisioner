@@ -40,11 +40,11 @@ Token replacement probably isn't the best way to accomplish this goal -- a bette
 
 ![Add Account](./img/AddAccountProduct.png)
 
-The Add Account product is the next step after installation. Right now, it's designed as a semi-manual process to add sub-accounts to this product.
+The Add Account product is the next step after installation. Right now, it's designed as a semi-manual process to add sub-accounts as targets under the portfolio.
 
-In the future, another lambda custom resource could be added to the master template which would automatically add accounts to this product by listing them through the Organizations API.
+In the future, another lambda custom resource could be added to the master template which would automatically add organization sub-accounts to the portfolio by listing them through the Organizations API and building a product for each account. The limitation here is that I'm not aware of a way to deploy a variable number of independent stacks or nested stacks, so the products deployed through that lambda custom resource would need to be managed manually.
 
-This is also where we can select the role names for the cross-account permissions.
+> Note: Deploying the New Target Account product is also where we select the role names for the cross-account permissions. These are auto-filled with AWS Control Tower cross-account management roles.
 
 ### New VPC Product
 
