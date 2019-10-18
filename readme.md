@@ -10,7 +10,7 @@ This template was developed to accomplish the following:
 
 > Note: This is an MVP solution for a specific use case, but it's meant to be customized. For example, the template for VPCs currently only provisions two private subnets in each VPC, but it can be modified to include public/private subnets with IGWs, NAT gateways, and custom routing tables.
 
-This solution is offered with no warranties, express or implied. You are responsible for examining, testing, customizing, and understanding the code and templates and all changes and costs they incur.
+> This solution is offered with no warranties, express or implied. You are responsible for examining, testing, customizing, and understanding the code and templates and all changes and costs they incur.
 
 ## Requirements
 
@@ -34,7 +34,7 @@ The master Template (templates/NetworkProvisionerCore.yaml) provisions the major
 
 It customizes the two templates used by the Service Catalog products it provisions by downloading the master templates, token-replacing them, and re-uploading them to the templates bucket under a /transformed/ key path.
 
-Token replacement probably isn't the best way to accomplish this goal -- a better way might be to parameterize the values and use Template Constraints through Service Catalog. But I built it with lambda custom resources and token replacement.
+Token replacement probably isn't the best way to accomplish this goal -- a better way might be to parameterize the values and use Constraints through Service Catalog to limit / auto-fill these variables.
 
 ### Add Account Product
 
