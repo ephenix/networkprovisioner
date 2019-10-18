@@ -8,7 +8,7 @@ This template was developed to accomplish the following:
 2. Automatically provision Transit Gateway Attachments to these VPCs
 3. Automatically Accept these attachments (even if the Transit gateway is not configured to automatically accept)
 
-Note: This is an MVP solution for a specific use case, but it's meant to be customized. For example, the template for VPCs currently only provisions two private VPCs, but it can be modified to include public/private with custom routing tables.
+> Note: This is an MVP solution for a specific use case, but it's meant to be customized. For example, the template for VPCs currently only provisions two private VPCs, but it can be modified to include public/private with custom routing tables.
 
 ## Requirements
 
