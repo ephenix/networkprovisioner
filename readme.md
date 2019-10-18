@@ -54,7 +54,7 @@ For each account we add, we get a Product added to the portfolio which provision
 
 Each account gets its own product due to the way Stack Set Constraints are added (Only 1 per Product - essentially, a given product is limited to a single sub-account)
 
-> Note: This template also sets up cross-account CloudWatch Events to trigger a lambda function to accept the transit gateway attachment. This is unneccessary if your transit gateway is already configured with auto-acceptance. Unfortunately, transit gateways cannot be re-configured once deployed to auto-accept.
+> Note: This template also sets up cross-account CloudWatch Events to trigger a lambda function to accept the transit gateway attachment. This is unneccessary if your transit gateway is already configured with auto-acceptance. Unfortunately, transit gateways cannot be re-configured once deployed to auto-accept. I built the solution this way to achieve the same functionality without an invasive network change, but in the future, Transit Gateways may be re-configurable to where this is no longer necessary.
 
 ## Installation Instructions
 
