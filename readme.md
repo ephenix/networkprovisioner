@@ -67,10 +67,9 @@ Each account gets its own product due to the way Stack Set Constraints are added
 
 > Remember: This transit gateway must be pre-shared with sub accounts -- this template does not manage this configuration.
 
-## Post Deployment Workflow
+## Deploying VPCs
 
-1. In Service Catalog, and we will launch an instance of the "New Network Target Account" product.
+1. In Service Catalog, we will launch an instance of the "New Network Target Account" product.
 2. Enter a name for the product deployment, then enter template parameters: Account Id, Account Name, and the Admin Role as well as Execution role are pre-filled with AWS Control Tower roles.
 3. Launch the product.
-
-4. After completion, we should have a new Product for the target account. Deploying an instance of this product will deploy the next VPC
+4. After this deployment completes, we should have a new Product for the target account. Deploying an instance of this product will deploy the next VPC. There are a limited number of parameters for this template, but the 'newvpc.yaml' template can be customized with additional functionality.
