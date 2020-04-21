@@ -1,42 +1,34 @@
 import os, zipfile, shutil, boto3, random
 
-buildid = ''.join([random.choice("abcdefghijklmnopqrstuvwxyz0123456789") for x in range(5)])
-
-print("[BUILD_ID]: {}".format(buildid))
-
-output = './NetworkProvisioner-{}'.format(buildid)
+basepath = os.path.dirname(os.path.realpath(__file__))
+output = os.path.join(basepath,'NetworkProvisioner')
 
 print("[OUTPUT_FOLDER]: {}\n".format(output))
 print("---------------------------------------")
 
+if os.path.exists(output):
+  print("--- Cleaning output directory...")
+  shutil.rmtree(output)
+print("--- Creating output folder structure...")    
 os.mkdir(output)
-os.mkdir(output + "/lambda")
-os.mkdir(output + "/templates")
+os.mkdir(os.path.join(output, "lambda"))
+os.mkdir(os.path.join(output, "templates"))
 
-CustomResourceFunctions =  ['addpermissions.py', 'nextcidr.py', 'tokenreplacetemplate.py']
-NormalFunctions = ['accepttgwattachment.py']
 
-for f in os.listdir('./src/lambda'):
+for f in os.listdir( os.path.join(basepath,'src/lambda') ):
+  if f != "cfnresponse.py":    
+    print("[CREATE_FILE]    {}/lambda/{}.zip".format(output,f))
+    zf = zipfile.ZipFile('{}/lambda/{}.zip'.format(output,f), mode='w')
 
-    # zip Lambda Custom Resource with cfnresponse module
-    if f in CustomResourceFunctions:
-        print("[CREATE_FILE]    {}/lambda/{}.zip".format(output,f))
-        zf = zipfile.ZipFile('{}/lambda/{}.zip'.format(output,f), mode='w')
-        print("--- [WRITE] ./src/lambda/{}.zip".format(f) )
-        zf.write("./src/lambda/{}".format(f))
-        print("--- [WRITE] ./src/lambda/cfnresponse.py")
-        zf.write("./src/lambda/cfnresponse.py")
-        zf.close()
+    print(f'--- [WRITE] {os.path.join(basepath,"src","lambda",f)}' )
+    zf.write( os.path.join(basepath,"src","lambda",f), f )
 
-    # bundle normal functions by themselves
-    if f in NormalFunctions:
-        print("[CREATE_FILE]    {}/lambda/{}.zip".format(output,f))
-        zf = zipfile.ZipFile('{}/lambda/{}.zip'.format(output,f), mode='w')
-        print("--- [WRITE] ./src/lambda/{0}")
-        zf.write("./src/lambda/{}".format(f))
-        zf.close()
+    print(f'--- [WRITE] {os.path.join(basepath,"src","lambda","cfnresponse.py")}' )
+    zf.write(os.path.join(basepath,"src","lambda","cfnresponse.py"), "cfnresponse.py")
+
+    zf.close()
 
 # Copy templates   --->   output
 for f in os.listdir('./src/templates'):
-    print("Copying {}   --->   {}/templates".format(f,output))
-    shutil.copyfile('./src/cloudformation/{}'.format(f), '{}/templates/{}'.format(output,f))
+  print( f'[COPY_FILE] {os.path.join(basepath,"src","templates",f)}   --->   {os.path.join(output,"templates",f)}')
+  shutil.copyfile( os.path.join(basepath,"src","templates",f), os.path.join(output,"templates",f))

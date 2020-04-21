@@ -1,0 +1,61 @@
+Parameters:
+  TargetAccountId:
+    Default: '000000000000'
+    Type: String
+    Description: AccountID for the account we'd like to add a product for.
+  TargetAccountName:
+    Type: String
+    Description: Enter the friendly name for this account.
+  AdminRoleArn:
+    Type: String
+    Default: ADMINROLEARN
+  ExecutionRoleName:
+    Type: String
+    Default: AWSControlTowerExecution
+Resources:
+  ProductAssociation:
+    Type: AWS::ServiceCatalog::PortfolioProductAssociation
+    Properties: 
+      PortfolioId: PORTFOLIOID
+      ProductId: !Ref ServiceProduct
+  ServiceProduct:
+    Type: AWS::ServiceCatalog::CloudFormationProduct
+    Properties: 
+      Description: Provisions a VPC.
+      Distributor: Networking
+      Name: !Join
+        - ' '
+        - - New VPC -
+          - !Ref TargetAccountName
+          - !Ref TargetAccountId
+      Owner: Networking
+      ProvisioningArtifactParameters:
+      - Info:
+          LoadTemplateFromURL: NEWVPCTEMPLATEURL
+  StackSetConstraint:
+    Type: AWS::ServiceCatalog::StackSetConstraint
+    DependsOn: ProductAssociation
+    Properties:
+      Description: Deploys the stack in the target account.
+      StackInstanceControl: ALLOWED
+      PortfolioId: PORTFOLIOID
+      ProductId: !Ref ServiceProduct
+      RegionList:
+        - !Ref AWS::Region
+      AdminRole: !Ref AdminRoleArn
+      AccountList:
+        - !Ref TargetAccountId
+      ExecutionRole: !Ref ExecutionRoleName
+  EventBusPolicy: 
+      Type: AWS::Events::EventBusPolicy
+      Properties: 
+          Action: "events:PutEvents"
+          Principal: !Ref TargetAccountId
+          StatementId: !Ref TargetAccountId
+  LambdaCustomResourcePermissions:
+    Type: Custom::AddPermissions
+    Description: Adds permissions for the sub-account to call the lambda function for custom cloudformation resources.
+    Properties:
+      ServiceToken: PERMISSIONFUNCTIONARN
+      AccountId: !Ref TargetAccountId
+      FunctionName: CIDRFUNCTIONNAME
